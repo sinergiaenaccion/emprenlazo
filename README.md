@@ -11,3 +11,4 @@ Directorio de emprendedores de Córdoba capital y alrededores (30 km).
 ## Estado del proyecto
 
 Base inicial en Next.js 16, React 19 y Supabase. La moderación de emprendimientos aún requiere un panel de administración.
+hola
