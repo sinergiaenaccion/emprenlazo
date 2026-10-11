@@ -54,6 +54,7 @@ export default function Home() {
           Emprendedores que se conectan · Córdoba capital y alrededores ({RADIO_KM} km)
         </p>
       </header>
+      <div className="mb-5"><a href="/sumate" className="inline-flex rounded-xl bg-[#FB075B] px-4 py-2.5 text-sm font-semibold text-white">Sumá tu emprendimiento gratis</a></div>
       <div className="mb-4 flex flex-wrap gap-2">
         <button onClick={() => setCategoria("todas")} className={`rounded-full px-3 py-1 text-sm ${categoria === "todas" ? "bg-[#FB075B] text-white" : "bg-neutral-100"}`}>
           Todas
