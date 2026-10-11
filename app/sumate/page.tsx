@@ -19,10 +19,11 @@ export default function SumatePage() {
 
   async function enviar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setError("");
     setMensaje("");
     setEnviando(true);
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const numero = String(form.get("whatsapp") ?? "").replace(/\D/g, "");
     const instagram = String(form.get("instagram") ?? "").replace(/^@/, "").trim();
     const lat = Number(form.get("lat"));
@@ -49,7 +50,7 @@ export default function SumatePage() {
     if (insertError) {
       setError("No pudimos enviar la solicitud. Verificá los datos e intentá nuevamente.");
     } else {
-      event.currentTarget.reset();
+      formElement.reset();
       setMensaje("¡Listo! Recibimos tu solicitud. El emprendimiento quedará pendiente de revisión antes de aparecer en el directorio.");
     }
     setEnviando(false);
