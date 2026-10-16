@@ -2,17 +2,38 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import { Zona, ZONA_COLUMNAS, zonaDeUbicacion } from "@/lib/zonas";
+import type { Punto } from "@/components/MapaUbicacion";
 
 type Categoria = { id: string; nombre: string };
+
+// Leaflet necesita el navegador: el mapa no se renderiza en el servidor.
+const MapaUbicacion = dynamic(() => import("@/components/MapaUbicacion"), {
+  ssr: false,
+  loading: () => <div className="h-80 w-full animate-pulse rounded-xl bg-neutral-200" />,
+});
 
 export default function SumatePage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [zonas, setZonas] = useState<Zona[]>([]);
+  const [zonaId, setZonaId] = useState("");
+  const [punto, setPunto] = useState<Punto | null>(null);
+  const [enCasa, setEnCasa] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+
+  const zonaElegida = zonas.find((z) => z.id === zonaId) ?? null;
+  // Quien atiende desde su casa no envía su punto: se usa el punto de referencia de la zona.
+  const puntoFinal: Punto | null = enCasa
+    ? zonaElegida ? { lat: zonaElegida.centro_lat, lng: zonaElegida.centro_lng } : null
+    : punto;
+  const puntoEnZona =
+    puntoFinal && zonaElegida
+      ? zonaDeUbicacion(zonas, puntoFinal.lat, puntoFinal.lng)?.id === zonaElegida.id
+      : null;
 
   useEffect(() => {
     supabase.from("categorias").select("id,nombre").order("nombre")
@@ -30,9 +51,6 @@ export default function SumatePage() {
     const form = new FormData(formElement);
     const numero = String(form.get("whatsapp") ?? "").replace(/\D/g, "");
     const instagram = String(form.get("instagram") ?? "").replace(/^@/, "").trim();
-    const lat = Number(form.get("lat"));
-    const lng = Number(form.get("lng"));
-    const zonaElegida = zonas.find((z) => z.id === String(form.get("zona_id") ?? ""));
 
     if (!zonaElegida) {
       setError("Elegí una zona de la lista.");
@@ -40,15 +58,15 @@ export default function SumatePage() {
       return;
     }
 
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
-      setError("Revisá las coordenadas: latitud entre -90 y 90 y longitud entre -180 y 180.");
+    if (!puntoFinal) {
+      setError("Marcá la ubicación de tu local en el mapa.");
       setEnviando(false);
       return;
     }
 
     // El punto tiene que caer dentro de la zona elegida.
-    if (zonaDeUbicacion(zonas, lat, lng)?.id !== zonaElegida.id) {
-      setError(`La ubicación no está dentro de ${zonaElegida.nombre}. Revisá la latitud y longitud o cambiá la zona.`);
+    if (zonaDeUbicacion(zonas, puntoFinal.lat, puntoFinal.lng)?.id !== zonaElegida.id) {
+      setError(`La ubicación no está dentro de ${zonaElegida.nombre}. Marcá otro punto en el mapa o cambiá la zona.`);
       setEnviando(false);
       return;
     }
@@ -59,8 +77,9 @@ export default function SumatePage() {
       descripcion: String(form.get("descripcion") ?? "").trim() || null,
       zona: zonaElegida.nombre,
       zona_id: zonaElegida.id,
-      lat,
-      lng,
+      lat: puntoFinal.lat,
+      lng: puntoFinal.lng,
+      ubicacion_aproximada: enCasa,
       whatsapp: numero || null,
       instagram: instagram || null,
       estado: "pendiente",
@@ -70,6 +89,9 @@ export default function SumatePage() {
       setError("No pudimos enviar la solicitud. Verificá los datos e intentá nuevamente.");
     } else {
       formElement.reset();
+      setZonaId("");
+      setPunto(null);
+      setEnCasa(false);
       setMensaje("¡Listo! Recibimos tu solicitud. El emprendimiento quedará pendiente de revisión antes de aparecer en el directorio.");
     }
     setEnviando(false);
@@ -99,22 +121,53 @@ export default function SumatePage() {
           <textarea name="descripcion" maxLength={500} rows={4} className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" placeholder="Contá qué ofrecés y qué te diferencia (hasta 500 caracteres)." />
         </label>
         <label className="grid gap-1 text-sm font-medium">Zona *
-          <select name="zona_id" required className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" defaultValue="">
+          <select
+            name="zona_id"
+            required
+            value={zonaId}
+            onChange={(e) => setZonaId(e.target.value)}
+            className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal"
+          >
             <option value="" disabled>Elegí tu barrio o localidad</option>
             {zonas.map((zona) => <option key={zona.id} value={zona.id}>{zona.nombre}</option>)}
           </select>
         </label>
         <fieldset className="grid gap-3 rounded-xl bg-neutral-50 p-4">
           <legend className="px-1 text-sm font-semibold">Ubicación *</legend>
-          <p className="text-sm text-neutral-600">Ingresá latitud y longitud del negocio, dentro de la zona que elegiste. Podés obtenerlas desde Google Maps al mantener presionado el punto del mapa. Más adelante vas a poder marcarlo directamente en el mapa.</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm">Latitud *
-              <input name="lat" required type="number" step="any" min="-90" max="90" className="rounded-lg border border-neutral-300 bg-white px-3 py-2.5 font-normal" placeholder="-31.2946" />
-            </label>
-            <label className="grid gap-1 text-sm">Longitud *
-              <input name="lng" required type="number" step="any" min="-180" max="180" className="rounded-lg border border-neutral-300 bg-white px-3 py-2.5 font-normal" placeholder="-64.2958" />
-            </label>
-          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={enCasa}
+              onChange={(e) => setEnCasa(e.target.checked)}
+              className="mt-1 h-4 w-4 accent-[#FB075B]"
+            />
+            <span>Atiendo desde mi casa. Mostramos solo la zona, no tu dirección ni tu punto exacto.</span>
+          </label>
+
+          {enCasa ? (
+            <p className="text-sm text-neutral-600">
+              {zonaElegida
+                ? `Tu ficha aparecerá como ubicada en ${zonaElegida.nombre} (ubicación aproximada).`
+                : "Primero elegí tu zona."}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-neutral-600">
+                {zonaElegida
+                  ? "Tocá el mapa para marcar tu local. Podés arrastrar el punto para ajustarlo. El recuadro rosa muestra la zona que elegiste (es aproximado)."
+                  : "Primero elegí tu zona para ver el recuadro en el mapa."}
+              </p>
+              <MapaUbicacion zona={zonaElegida} punto={punto} onCambiar={setPunto} />
+              {punto && zonaElegida && (
+                <p className={`text-sm ${puntoEnZona ? "text-green-700" : "text-red-700"}`}>
+                  {puntoEnZona
+                    ? `El punto está dentro de ${zonaElegida.nombre}.`
+                    : `El punto está fuera de ${zonaElegida.nombre}. Marcá otro lugar en el mapa.`}
+                </p>
+              )}
+              {!punto && zonaElegida && <p className="text-sm text-neutral-500">Todavía no marcaste el punto.</p>}
+            </>
+          )}
         </fieldset>
         <label className="grid gap-1 text-sm font-medium">WhatsApp
           <input name="whatsapp" inputMode="tel" className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" placeholder="5493511234567 (solo números)" />
