@@ -25,6 +25,5 @@ Directorio de emprendedores de la zona norte de Córdoba capital y Sierras Chica
 Base en Next.js 16, React 19 y Supabase. Pendientes:
 
 - Panel de administración y moderación de fichas.
-- Selector de ubicación en el mapa (hoy se ingresan latitud y longitud).
 - Aceptación de términos registrada, páginas legales y canal de reportes.
 - Decisión sobre el catálogo de productos.
