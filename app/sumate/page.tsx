@@ -3,11 +3,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { Zona, ZONA_COLUMNAS, zonaDeUbicacion } from "@/lib/zonas";
 
 type Categoria = { id: string; nombre: string };
 
 export default function SumatePage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [zonas, setZonas] = useState<Zona[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
@@ -15,6 +17,8 @@ export default function SumatePage() {
   useEffect(() => {
     supabase.from("categorias").select("id,nombre").order("nombre")
       .then(({ data }) => setCategorias(data ?? []));
+    supabase.from("zonas").select(ZONA_COLUMNAS).order("nombre")
+      .then(({ data }) => setZonas((data ?? []) as Zona[]));
   }, []);
 
   async function enviar(event: FormEvent<HTMLFormElement>) {
@@ -28,9 +32,23 @@ export default function SumatePage() {
     const instagram = String(form.get("instagram") ?? "").replace(/^@/, "").trim();
     const lat = Number(form.get("lat"));
     const lng = Number(form.get("lng"));
+    const zonaElegida = zonas.find((z) => z.id === String(form.get("zona_id") ?? ""));
+
+    if (!zonaElegida) {
+      setError("Elegí una zona de la lista.");
+      setEnviando(false);
+      return;
+    }
 
     if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
       setError("Revisá las coordenadas: latitud entre -90 y 90 y longitud entre -180 y 180.");
+      setEnviando(false);
+      return;
+    }
+
+    // El punto tiene que caer dentro de la zona elegida.
+    if (zonaDeUbicacion(zonas, lat, lng)?.id !== zonaElegida.id) {
+      setError(`La ubicación no está dentro de ${zonaElegida.nombre}. Revisá la latitud y longitud o cambiá la zona.`);
       setEnviando(false);
       return;
     }
@@ -39,7 +57,8 @@ export default function SumatePage() {
       nombre: String(form.get("nombre") ?? "").trim(),
       categoria: String(form.get("categoria") ?? ""),
       descripcion: String(form.get("descripcion") ?? "").trim() || null,
-      zona: String(form.get("zona") ?? "").trim(),
+      zona: zonaElegida.nombre,
+      zona_id: zonaElegida.id,
       lat,
       lng,
       whatsapp: numero || null,
@@ -63,6 +82,7 @@ export default function SumatePage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-[#FB075B]">Comunidad emprendedora</p>
         <h1 className="mt-2 text-3xl font-bold text-[#5A0A24]">Sumá tu emprendimiento</h1>
         <p className="mt-3 text-neutral-600">Creá tu ficha gratuita para que más personas puedan conocer lo que hacés. Revisaremos la información antes de publicarla.</p>
+        <p className="mt-2 text-sm text-neutral-500">Por ahora Emprenlazo recibe emprendimientos de la zona norte de Córdoba capital y de Sierras Chicas.</p>
       </header>
 
       <form onSubmit={enviar} className="grid gap-5 rounded-2xl border border-neutral-200 p-5 sm:p-7">
@@ -78,12 +98,15 @@ export default function SumatePage() {
         <label className="grid gap-1 text-sm font-medium">Descripción
           <textarea name="descripcion" maxLength={500} rows={4} className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" placeholder="Contá qué ofrecés y qué te diferencia (hasta 500 caracteres)." />
         </label>
-        <label className="grid gap-1 text-sm font-medium">Localidad o barrio *
-          <input name="zona" required maxLength={100} className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" placeholder="Ej. Villa Allende, Córdoba" />
+        <label className="grid gap-1 text-sm font-medium">Zona *
+          <select name="zona_id" required className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" defaultValue="">
+            <option value="" disabled>Elegí tu barrio o localidad</option>
+            {zonas.map((zona) => <option key={zona.id} value={zona.id}>{zona.nombre}</option>)}
+          </select>
         </label>
         <fieldset className="grid gap-3 rounded-xl bg-neutral-50 p-4">
-          <legend className="px-1 text-sm font-semibold">Ubicación en el mapa *</legend>
-          <p className="text-sm text-neutral-600">Para ubicarte correctamente en esta primera versión, ingresá latitud y longitud del negocio. Podés obtenerlas desde Google Maps al mantener presionado el punto del mapa.</p>
+          <legend className="px-1 text-sm font-semibold">Ubicación *</legend>
+          <p className="text-sm text-neutral-600">Ingresá latitud y longitud del negocio, dentro de la zona que elegiste. Podés obtenerlas desde Google Maps al mantener presionado el punto del mapa. Más adelante vas a poder marcarlo directamente en el mapa.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm">Latitud *
               <input name="lat" required type="number" step="any" min="-90" max="90" className="rounded-lg border border-neutral-300 bg-white px-3 py-2.5 font-normal" placeholder="-31.2946" />

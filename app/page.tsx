@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { CORDOBA_CENTRO, RADIO_KM, distanciaKm, estaEnCobertura } from "@/lib/geo";
+import { Zona, ZONA_COLUMNAS, zonaDeUbicacion } from "@/lib/zonas";
 
 type Emprendimiento = {
   id: string;
@@ -21,6 +21,7 @@ type Categoria = { id: string; nombre: string };
 export default function Home() {
   const [items, setItems] = useState<Emprendimiento[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [zonas, setZonas] = useState<Zona[]>([]);
   const [categoria, setCategoria] = useState<string>("todas");
   const [error, setError] = useState<string | null>(null);
 
@@ -30,18 +31,29 @@ export default function Home() {
       else setCategorias(data ?? []);
     });
 
+    supabase.from("zonas").select(ZONA_COLUMNAS).order("nombre").then(({ data, error }) => {
+      if (error) setError(error.message);
+      else setZonas((data ?? []) as Zona[]);
+    });
+
     supabase.from("emprendimientos")
       .select("id,nombre,categoria,descripcion,zona,lat,lng,whatsapp,instagram")
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (error) setError(error.message);
-        else setItems((data ?? []).filter((e) => estaEnCobertura(e.lat, e.lng)));
+        else setItems((data ?? []) as Emprendimiento[]);
       });
   }, []);
 
+  // Solo se muestran fichas cuyo punto cae dentro de una zona habilitada.
   const visibles = useMemo(
-    () => items.filter((e) => categoria === "todas" || e.categoria === categoria),
-    [items, categoria]
+    () =>
+      items.filter(
+        (e) =>
+          zonaDeUbicacion(zonas, e.lat, e.lng) !== null &&
+          (categoria === "todas" || e.categoria === categoria)
+      ),
+    [items, zonas, categoria]
   );
 
   return (
@@ -51,7 +63,7 @@ export default function Home() {
           Empren<span className="text-[#FB075B]">lazo</span>
         </h1>
         <p className="text-sm text-neutral-600">
-          Emprendedores que se conectan · Córdoba capital y alrededores ({RADIO_KM} km)
+          Emprendedores que se conectan · Zona norte de Córdoba capital y Sierras Chicas
         </p>
       </header>
       <div className="mb-5"><a href="/sumate" className="inline-flex rounded-xl bg-[#FB075B] px-4 py-2.5 text-sm font-semibold text-white">Sumá tu emprendimiento gratis</a></div>
@@ -70,13 +82,11 @@ export default function Home() {
         {visibles.map((e) => (
           <li key={e.id} className="rounded-xl border border-neutral-200 p-4">
             <h2 className="text-lg font-semibold text-[#5A0A24]">{e.nombre}</h2>
-            <p className="text-sm text-neutral-500">
-              {e.zona} · {distanciaKm(CORDOBA_CENTRO, { lat: e.lat, lng: e.lng }).toFixed(1)} km del centro
-            </p>
+            <p className="text-sm text-neutral-500">{e.zona}</p>
             {e.descripcion && <p className="mt-2 text-sm">{e.descripcion}</p>}
             <div className="mt-3 flex gap-3 text-sm">
               {e.whatsapp && <a className="text-[#FB075B] underline" href={`https://wa.me/${e.whatsapp}`}>WhatsApp</a>}
-              {e.instagram && <a className="text-[#FB075B] underline" href={`https://instagram.com/${e.instagram}`}>Instagram</a>}
+              {e.instagram && <a className="text-[#FB075B] underline" href={`https://instagram.com/${encodeURIComponent(e.instagram)}`}>Instagram</a>}
             </div>
           </li>
         ))}
