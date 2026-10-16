@@ -20,14 +20,19 @@ export default function SumatePage() {
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [zonaId, setZonaId] = useState("");
   const [punto, setPunto] = useState<Punto | null>(null);
+  const [enCasa, setEnCasa] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
   const zonaElegida = zonas.find((z) => z.id === zonaId) ?? null;
+  // Quien atiende desde su casa no envía su punto: se usa el punto de referencia de la zona.
+  const puntoFinal: Punto | null = enCasa
+    ? zonaElegida ? { lat: zonaElegida.centro_lat, lng: zonaElegida.centro_lng } : null
+    : punto;
   const puntoEnZona =
-    punto && zonaElegida
-      ? zonaDeUbicacion(zonas, punto.lat, punto.lng)?.id === zonaElegida.id
+    puntoFinal && zonaElegida
+      ? zonaDeUbicacion(zonas, puntoFinal.lat, puntoFinal.lng)?.id === zonaElegida.id
       : null;
 
   useEffect(() => {
@@ -53,14 +58,14 @@ export default function SumatePage() {
       return;
     }
 
-    if (!punto) {
+    if (!puntoFinal) {
       setError("Marcá la ubicación de tu local en el mapa.");
       setEnviando(false);
       return;
     }
 
     // El punto tiene que caer dentro de la zona elegida.
-    if (zonaDeUbicacion(zonas, punto.lat, punto.lng)?.id !== zonaElegida.id) {
+    if (zonaDeUbicacion(zonas, puntoFinal.lat, puntoFinal.lng)?.id !== zonaElegida.id) {
       setError(`La ubicación no está dentro de ${zonaElegida.nombre}. Marcá otro punto en el mapa o cambiá la zona.`);
       setEnviando(false);
       return;
@@ -72,8 +77,9 @@ export default function SumatePage() {
       descripcion: String(form.get("descripcion") ?? "").trim() || null,
       zona: zonaElegida.nombre,
       zona_id: zonaElegida.id,
-      lat: punto.lat,
-      lng: punto.lng,
+      lat: puntoFinal.lat,
+      lng: puntoFinal.lng,
+      ubicacion_aproximada: enCasa,
       whatsapp: numero || null,
       instagram: instagram || null,
       estado: "pendiente",
@@ -85,6 +91,7 @@ export default function SumatePage() {
       formElement.reset();
       setZonaId("");
       setPunto(null);
+      setEnCasa(false);
       setMensaje("¡Listo! Recibimos tu solicitud. El emprendimiento quedará pendiente de revisión antes de aparecer en el directorio.");
     }
     setEnviando(false);
@@ -127,20 +134,40 @@ export default function SumatePage() {
         </label>
         <fieldset className="grid gap-3 rounded-xl bg-neutral-50 p-4">
           <legend className="px-1 text-sm font-semibold">Ubicación *</legend>
-          <p className="text-sm text-neutral-600">
-            {zonaElegida
-              ? "Tocá el mapa para marcar tu local. Podés arrastrar el punto para ajustarlo. El recuadro rosa muestra la zona que elegiste (es aproximado)."
-              : "Primero elegí tu zona para ver el recuadro en el mapa."}
-          </p>
-          <MapaUbicacion zona={zonaElegida} punto={punto} onCambiar={setPunto} />
-          {punto && zonaElegida && (
-            <p className={`text-sm ${puntoEnZona ? "text-green-700" : "text-red-700"}`}>
-              {puntoEnZona
-                ? `El punto está dentro de ${zonaElegida.nombre}.`
-                : `El punto está fuera de ${zonaElegida.nombre}. Marcá otro lugar en el mapa.`}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={enCasa}
+              onChange={(e) => setEnCasa(e.target.checked)}
+              className="mt-1 h-4 w-4 accent-[#FB075B]"
+            />
+            <span>Atiendo desde mi casa. Mostramos solo la zona, no tu dirección ni tu punto exacto.</span>
+          </label>
+
+          {enCasa ? (
+            <p className="text-sm text-neutral-600">
+              {zonaElegida
+                ? `Tu ficha aparecerá como ubicada en ${zonaElegida.nombre} (ubicación aproximada).`
+                : "Primero elegí tu zona."}
             </p>
+          ) : (
+            <>
+              <p className="text-sm text-neutral-600">
+                {zonaElegida
+                  ? "Tocá el mapa para marcar tu local. Podés arrastrar el punto para ajustarlo. El recuadro rosa muestra la zona que elegiste (es aproximado)."
+                  : "Primero elegí tu zona para ver el recuadro en el mapa."}
+              </p>
+              <MapaUbicacion zona={zonaElegida} punto={punto} onCambiar={setPunto} />
+              {punto && zonaElegida && (
+                <p className={`text-sm ${puntoEnZona ? "text-green-700" : "text-red-700"}`}>
+                  {puntoEnZona
+                    ? `El punto está dentro de ${zonaElegida.nombre}.`
+                    : `El punto está fuera de ${zonaElegida.nombre}. Marcá otro lugar en el mapa.`}
+                </p>
+              )}
+              {!punto && zonaElegida && <p className="text-sm text-neutral-500">Todavía no marcaste el punto.</p>}
+            </>
           )}
-          {!punto && zonaElegida && <p className="text-sm text-neutral-500">Todavía no marcaste el punto.</p>}
         </fieldset>
         <label className="grid gap-1 text-sm font-medium">WhatsApp
           <input name="whatsapp" inputMode="tel" className="rounded-lg border border-neutral-300 px-3 py-2.5 font-normal" placeholder="5493511234567 (solo números)" />

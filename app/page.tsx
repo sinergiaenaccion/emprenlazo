@@ -12,6 +12,7 @@ type Emprendimiento = {
   zona: string;
   lat: number;
   lng: number;
+  ubicacion_aproximada: boolean;
   whatsapp: string | null;
   instagram: string | null;
 };
@@ -37,7 +38,7 @@ export default function Home() {
     });
 
     supabase.from("emprendimientos")
-      .select("id,nombre,categoria,descripcion,zona,lat,lng,whatsapp,instagram")
+      .select("id,nombre,categoria,descripcion,zona,lat,lng,ubicacion_aproximada,whatsapp,instagram")
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (error) setError(error.message);
@@ -82,7 +83,10 @@ export default function Home() {
         {visibles.map((e) => (
           <li key={e.id} className="rounded-xl border border-neutral-200 p-4">
             <h2 className="text-lg font-semibold text-[#5A0A24]">{e.nombre}</h2>
-            <p className="text-sm text-neutral-500">{e.zona}</p>
+            <p className="text-sm text-neutral-500">
+              {e.zona}
+              {e.ubicacion_aproximada && " · ubicación aproximada"}
+            </p>
             {e.descripcion && <p className="mt-2 text-sm">{e.descripcion}</p>}
             <div className="mt-3 flex gap-3 text-sm">
               {e.whatsapp && <a className="text-[#FB075B] underline" href={`https://wa.me/${e.whatsapp}`}>WhatsApp</a>}
